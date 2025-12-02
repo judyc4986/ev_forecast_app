@@ -1,7 +1,7 @@
 import os
 import math
-import pandas as pd
 from flask import Flask, render_template, request, send_from_directory, flash, redirect, url_for
+from openpyxl import load_workbook
 
 # =========================================================
 # BASIC FLASK SETUP
@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.secret_key = "change_this_to_any_random_string"
 
 # =========================================================
-# PATHS – POINTING TO YOUR DESKTOP FILES
+# PATHS – RENDER & LOCAL FRIENDLY
 # =========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,43 +19,44 @@ CHARTS_DIR = os.path.join(BASE_DIR, "static", "charts")
 MAPS_DIR = os.path.join(BASE_DIR, "static", "maps")
 
 # =========================================================
-# LOAD FORMULA TABLE (ONCE AT STARTUP)
+# LOAD EXCEL (openpyxl) INSTEAD OF PANDAS
 # =========================================================
 if not os.path.exists(FORMULA_PATH):
     raise FileNotFoundError(f"Cannot find Excel file: {FORMULA_PATH}")
 
-df_formulas = pd.read_excel(FORMULA_PATH)
+wb = load_workbook(FORMULA_PATH)
+ws = wb.active
 
-# Create a cleaned lowercase county column for matching
-df_formulas["County_clean"] = (
-    df_formulas["County"]
-    .astype(str)
-    .str.strip()
-    .str.lower()
-)
+# Read header row
+columns = [cell.value for cell in ws[1]]
+
+# Convert sheet rows → list of dicts
+df_formulas = []
+for row in ws.iter_rows(min_row=2, values_only=True):
+    row_dict = dict(zip(columns, row))
+    row_dict["County_clean"] = str(row_dict["County"]).strip().lower()
+    df_formulas.append(row_dict)
+
 
 # =========================================================
 # SAFE FORMULA EVALUATOR
 # =========================================================
 def evaluate_formula(formula_str, x_value):
     """
-    Takes a formula like 'y = 0.0148*x^3 + 2*x^2 + 3'
-    and returns y for a given x_value.
-
-    Supports:
-      - ^ (Excel) → ** (Python)
-      - exp(), log(), sqrt()
+    Evaluates formulas like:
+      y = 0.014*x^3 - 0.01*x^2 + 50
+      y = 1 / (1 + exp(-(0.003*x - 2.5)))
     """
     if not isinstance(formula_str, str):
         return None
 
-    # Only keep part after "y ="
+    # Split "y = ..."
     parts = formula_str.split("=")
     if len(parts) < 2:
         return None
 
-    expr = parts[1].strip()  # expression after '='
-    expr = expr.replace("^", "**")  # Excel to Python power operator
+    expr = parts[1].strip()
+    expr = expr.replace("^", "**")  # Excel → Python
 
     allowed_names = {
         "x": x_value,
@@ -71,24 +72,23 @@ def evaluate_formula(formula_str, x_value):
 
 
 # =========================================================
-# HELPER – FIND PNG BY COUNTY
+# HELPER – FIND PNG BY COUNTY NAME
 # =========================================================
 def find_image_for_county(directory, county_name):
-    """
-    Look in directory for a PNG containing the county name.
-    """
     if not os.path.isdir(directory):
         return None
 
     target = county_name.replace(" ", "_").lower()
+
     for fname in os.listdir(directory):
         if fname.lower().endswith(".png") and target in fname.lower():
             return fname
+
     return None
 
 
 # =========================================================
-# SERVE CHART & MAP IMAGES
+# ROUTES TO SERVE CHART & MAP FILES
 # =========================================================
 @app.route("/chart/<path:filename>")
 def serve_chart(filename):
@@ -109,8 +109,6 @@ def index():
     chart_filename = None
     map_filename = None
     county_display = None
-    ev_formula = None
-    adopt_formula = None
 
     if request.method == "POST":
         county_input = request.form.get("county", "").strip()
@@ -120,33 +118,34 @@ def index():
             flash("Please enter a county name.")
             return redirect(url_for("index"))
 
-        # Lookup county
         county_clean = county_input.lower()
-        match = df_formulas[df_formulas["County_clean"] == county_clean]
 
-        if match.empty:
+        # Manual lookup in list of dicts
+        matches = [r for r in df_formulas if r["County_clean"] == county_clean]
+
+        if not matches:
             flash(f"County '{county_input}' not found in Excel file.")
             return redirect(url_for("index"))
 
-        row = match.iloc[0]
+        row = matches[0]
         county_display = row["County"]
 
         ev_formula = row.get("EVs_vs_SC_Formula")
         adopt_formula = row.get("Adopt_vs_SC_Formula")
 
-        # Evaluate formulas if x provided
+        # If user provided X (superchargers):
         if x_input:
             try:
                 x_val = float(x_input)
             except ValueError:
-                flash("Superchargers (x) must be a number.")
+                flash("Superchargers must be a valid number.")
                 return redirect(url_for("index"))
 
             ev_y = evaluate_formula(ev_formula, x_val)
             adopt_y = evaluate_formula(adopt_formula, x_val)
 
             if ev_y is None or adopt_y is None:
-                flash("Could not evaluate one or both formulas.")
+                flash("Could not evaluate formulas for this county.")
                 return redirect(url_for("index"))
 
             result = {
@@ -155,7 +154,7 @@ def index():
                 "adopt_y": adopt_y,
             }
 
-        # Find PNG chart & map
+        # Find chart & map PNGs
         chart_filename = find_image_for_county(CHARTS_DIR, county_display)
         map_filename = find_image_for_county(MAPS_DIR, county_display)
 
@@ -168,15 +167,13 @@ def index():
         "index.html",
         result=result,
         county=county_display,
-        ev_formula=ev_formula,
-        adopt_formula=adopt_formula,
         chart_filename=chart_filename,
         map_filename=map_filename,
     )
 
 
 # =========================================================
-# RUN FLASK
+# RUN (LOCAL ONLY — Render uses Gunicorn)
 # =========================================================
 if __name__ == "__main__":
     app.run(debug=True)
