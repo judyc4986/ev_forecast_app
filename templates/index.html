@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Washington County-Level EV Forecast</title>
+    <style>
+        body { font-family: Arial; background:#f5f7fb; padding:0; margin:0; }
+        .container { max-width:900px; margin:40px auto; padding:20px;}
+        .card { background:white; padding:25px 30px; border-radius:10px;
+                margin-bottom:25px; box-shadow:0 2px 7px rgba(0,0,0,0.08);}
+        input[type=text], input[type=number] {
+            width:100%; padding:10px; margin-top:6px; font-size:16px;
+            border:1px solid #ccc; border-radius:6px;
+        }
+        button { margin-top:20px; padding:12px 28px; background:#005bbb; 
+                 color:white; border:none; border-radius:6px; font-size:16px; }
+        button:hover { background:#004a9a; }
+        img { width:100%; border-radius:10px; margin-top:15px; }
+        .flash { background:#ffe6e6; padding:10px; margin-bottom:10px;
+                 border-left:5px solid #ff5c5c; border-radius:4px;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Washington County-Level EV Forecast</h1>
+
+    {% with msgs = get_flashed_messages() %}
+      {% if msgs %}
+        {% for m in msgs %}
+        <div class="flash">{{ m }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <form method="POST">
+            <label>County Name:</label>
+            <input type="text" name="county" value="{{ county or '' }}" required>
+
+            <label>Superchargers:</label>
+            <input type="number" step="any" name="superchargers" placeholder="Enter number of superchargers">
+
+            <button type="submit">Calculate</button>
+        </form>
+    </div>
+
+    {% if county %}
+    <div class="card">
+        <h2>County: {{ county }}</h2>
+
+        {% if result %}
+        <h3>Forecast Results</h3>
+        <p>For <strong>{{ result.x }}</strong> superchargers:</p>
+
+        <ul>
+            <li>EV Registrations: 
+                <strong>{{ "{:,.2f}".format(result.ev_y) }}</strong>
+            </li>
+
+            <li>Adoption Rate: 
+                <strong>{{ "{:,.2f}".format(result.adopt_y * 100) }}%</strong>
+            </li>
+        </ul>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>County-Level EV Forecast</h3>
+        {% if chart_filename %}
+            <img src="{{ url_for('serve_chart', filename=chart_filename) }}">
+        {% else %}
+            <p>No chart available.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>County Map</h3>
+        {% if map_filename %}
+            <img src="{{ url_for('serve_map', filename=map_filename) }}">
+        {% else %}
+            <p>No map available.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+</body>
+</html>
+"""
