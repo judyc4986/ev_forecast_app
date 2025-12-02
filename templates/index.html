@@ -74,7 +74,7 @@
     </div>
 
     <div class="card">
-        <h3>County Map</h3>
+        <h3>Population Demand (Green) vs Existing Supercharger Points (Red)</h3>
         {% if map_filename %}
             <img src="{{ url_for('serve_map', filename=map_filename) }}">
         {% else %}
@@ -86,4 +86,3 @@
 </div>
 </body>
 </html>
-"""
