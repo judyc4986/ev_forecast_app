@@ -37,8 +37,9 @@
             <label>County Name:</label>
             <input type="text" name="county" value="{{ county or '' }}" required>
 
-            <label>Superchargers:</label>
-            <input type="number" step="any" name="superchargers" placeholder="Enter number of superchargers">
+            <label>Supercharger Points:</label>
+            <input type="number" step="any" name="superchargers" placeholder="Enter number of supercharger points" 
+                   value="{{ superchargers or '' }}">
 
             <button type="submit">Calculate</button>
         </form>
@@ -47,6 +48,10 @@
     {% if county %}
     <div class="card">
         <h2>County: {{ county }}</h2>
+
+        {% if supercharger_points is not none %}
+        <p><strong>Existing Supercharger Points:</strong> {{ supercharger_points }}</p>
+        {% endif %}
 
         {% if result %}
         <h3>Forecast Results</h3>
@@ -64,8 +69,19 @@
         {% endif %}
     </div>
 
+    <!-- MAP FIRST -->
     <div class="card">
-        <h3>County-Level EV Forecast</h3>
+        <h3>County-Level Supercharger & Population Map</h3>
+        {% if map_filename %}
+            <img src="{{ url_for('serve_map', filename=map_filename) }}">
+        {% else %}
+            <p>No map available.</p>
+        {% endif %}
+    </div>
+
+    <!-- CHART SECOND -->
+    <div class="card">
+        <h3>County-Level EV Forecast Curve</h3>
         {% if chart_filename %}
             <img src="{{ url_for('serve_chart', filename=chart_filename) }}">
         {% else %}
@@ -73,14 +89,6 @@
         {% endif %}
     </div>
 
-    <div class="card">
-        <h3>Population Demand (Green) vs Existing Supercharger Points (Red)</h3>
-        {% if map_filename %}
-            <img src="{{ url_for('serve_map', filename=map_filename) }}">
-        {% else %}
-            <p>No map available.</p>
-        {% endif %}
-    </div>
     {% endif %}
 
 </div>

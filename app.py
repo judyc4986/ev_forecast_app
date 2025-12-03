@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 # BASIC FLASK SETUP
 # =========================================================
 app = Flask(__name__)
-app.secret_key = "change_this_to_any_random_string"
+app.secret_key = "random_secret_string"
 
 # =========================================================
 # PATHS – RENDER & LOCAL FRIENDLY
@@ -15,11 +15,13 @@ app.secret_key = "change_this_to_any_random_string"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 FORMULA_PATH = os.path.join(BASE_DIR, "static", "data", "County-level formula_cleaned.xlsx")
+SC_SUMMARY_PATH = os.path.join(BASE_DIR, "static", "data", "supercharger_by_county_summary.xlsx")
+
 CHARTS_DIR = os.path.join(BASE_DIR, "static", "charts")
 MAPS_DIR = os.path.join(BASE_DIR, "static", "maps")
 
 # =========================================================
-# LOAD EXCEL (openpyxl) INSTEAD OF PANDAS
+# LOAD FORMULA EXCEL USING OPENPYXL
 # =========================================================
 if not os.path.exists(FORMULA_PATH):
     raise FileNotFoundError(f"Cannot find Excel file: {FORMULA_PATH}")
@@ -27,38 +29,46 @@ if not os.path.exists(FORMULA_PATH):
 wb = load_workbook(FORMULA_PATH)
 ws = wb.active
 
-# Read header row
 columns = [cell.value for cell in ws[1]]
 
-# Convert sheet rows → list of dicts
 df_formulas = []
 for row in ws.iter_rows(min_row=2, values_only=True):
     row_dict = dict(zip(columns, row))
     row_dict["County_clean"] = str(row_dict["County"]).strip().lower()
     df_formulas.append(row_dict)
 
+# =========================================================
+# LOAD SUPERCARGER SUMMARY FILE
+# =========================================================
+if not os.path.exists(SC_SUMMARY_PATH):
+    raise FileNotFoundError(f"Cannot find Supercharger summary: {SC_SUMMARY_PATH}")
+
+wb_sc = load_workbook(SC_SUMMARY_PATH)
+ws_sc = wb_sc.active
+
+sc_columns = [cell.value for cell in ws_sc[1]]
+
+supercharger_summary = []
+for row in ws_sc.iter_rows(min_row=2, values_only=True):
+    row_dict = dict(zip(sc_columns, row))
+    row_dict["County_clean"] = str(row_dict["County"]).strip().lower()
+    supercharger_summary.append(row_dict)
 
 # =========================================================
 # SAFE FORMULA EVALUATOR
 # =========================================================
 def evaluate_formula(formula_str, x_value):
-    """
-    Evaluates formulas like:
-      y = 0.014*x^3 - 0.01*x^2 + 50
-      y = 1 / (1 + exp(-(0.003*x - 2.5)))
-    """
     if not isinstance(formula_str, str):
         return None
 
-    # Split "y = ..."
     parts = formula_str.split("=")
     if len(parts) < 2:
         return None
 
     expr = parts[1].strip()
-    expr = expr.replace("^", "**")  # Excel → Python
+    expr = expr.replace("^", "**")
 
-    allowed_names = {
+    allowed = {
         "x": x_value,
         "exp": math.exp,
         "log": math.log,
@@ -66,13 +76,12 @@ def evaluate_formula(formula_str, x_value):
     }
 
     try:
-        return float(eval(expr, {"__builtins__": {}}, allowed_names))
+        return float(eval(expr, {"__builtins__": {}}, allowed))
     except Exception:
         return None
 
-
 # =========================================================
-# HELPER – FIND PNG BY COUNTY NAME
+# FIND IMAGE FOR COUNTY
 # =========================================================
 def find_image_for_county(directory, county_name):
     if not os.path.isdir(directory):
@@ -86,9 +95,8 @@ def find_image_for_county(directory, county_name):
 
     return None
 
-
 # =========================================================
-# ROUTES TO SERVE CHART & MAP FILES
+# ROUTES TO SERVE STATIC CHARTS & MAPS
 # =========================================================
 @app.route("/chart/<path:filename>")
 def serve_chart(filename):
@@ -99,9 +107,8 @@ def serve_chart(filename):
 def serve_map(filename):
     return send_from_directory(MAPS_DIR, filename)
 
-
 # =========================================================
-# MAIN PAGE
+# MAIN APP ROUTE
 # =========================================================
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -109,6 +116,7 @@ def index():
     chart_filename = None
     map_filename = None
     county_display = None
+    supercharger_points = None
 
     if request.method == "POST":
         county_input = request.form.get("county", "").strip()
@@ -120,25 +128,32 @@ def index():
 
         county_clean = county_input.lower()
 
-        # Manual lookup in list of dicts
         matches = [r for r in df_formulas if r["County_clean"] == county_clean]
-
         if not matches:
-            flash(f"County '{county_input}' not found in Excel file.")
+            flash(f"County '{county_input}' not found.")
             return redirect(url_for("index"))
 
         row = matches[0]
         county_display = row["County"]
 
+        # ------------------------------------------------------
+        # Load supercharger count for county
+        # ------------------------------------------------------
+        sc_match = [r for r in supercharger_summary if r["County_clean"] == county_clean]
+        if sc_match:
+            supercharger_points = sc_match[0].get("Supercharger_Count", None)
+
+        # ------------------------------------------------------
+        # Forecast values if user entered X
+        # ------------------------------------------------------
         ev_formula = row.get("EVs_vs_SC_Formula")
         adopt_formula = row.get("Adopt_vs_SC_Formula")
 
-        # If user provided X (superchargers):
         if x_input:
             try:
                 x_val = float(x_input)
             except ValueError:
-                flash("Superchargers must be a valid number.")
+                flash("Supercharger Points must be a valid number.")
                 return redirect(url_for("index"))
 
             ev_y = evaluate_formula(ev_formula, x_val)
@@ -154,14 +169,16 @@ def index():
                 "adopt_y": adopt_y,
             }
 
-        # Find chart & map PNGs
+        # ------------------------------------------------------
+        # Find map & chart
+        # ------------------------------------------------------
         chart_filename = find_image_for_county(CHARTS_DIR, county_display)
         map_filename = find_image_for_county(MAPS_DIR, county_display)
 
-        if chart_filename is None:
-            flash(f"No chart image found for county: {county_display}")
         if map_filename is None:
-            flash(f"No map image found for county: {county_display}")
+            flash(f"No map image found for {county_display}.")
+        if chart_filename is None:
+            flash(f"No chart image found for {county_display}.")
 
     return render_template(
         "index.html",
@@ -169,11 +186,11 @@ def index():
         county=county_display,
         chart_filename=chart_filename,
         map_filename=map_filename,
+        supercharger_points=supercharger_points,
     )
 
-
 # =========================================================
-# RUN (LOCAL ONLY — Render uses Gunicorn)
+# LOCAL RUN
 # =========================================================
 if __name__ == "__main__":
     app.run(debug=True)
