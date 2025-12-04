@@ -2,25 +2,119 @@
 <html>
 <head>
     <title>Washington County-Level EV Forecast</title>
+
     <style>
-        body { font-family: Arial; background:#f5f7fb; padding:0; margin:0; }
-        .container { max-width:900px; margin:40px auto; padding:20px;}
-        .card { background:white; padding:25px 30px; border-radius:10px;
-                margin-bottom:25px; box-shadow:0 2px 7px rgba(0,0,0,0.08);}
-        input[type=text], input[type=number] {
-            width:100%; padding:10px; margin-top:6px; font-size:16px;
-            border:1px solid #ccc; border-radius:6px;
+        /* ============================================
+           TESLA THEME COLORS
+        ============================================ */
+        :root {
+            --tesla-red: #e82127;
+            --dark-bg: #0b0c10;
+            --card-bg: #111318;
+            --soft-bg: #16181f;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border: #2a2d34;
         }
-        button { margin-top:20px; padding:12px 28px; background:#005bbb; 
-                 color:white; border:none; border-radius:6px; font-size:16px; }
-        button:hover { background:#004a9a; }
-        img { width:100%; border-radius:10px; margin-top:15px; }
-        .flash { background:#ffe6e6; padding:10px; margin-bottom:10px;
-                 border-left:5px solid #ff5c5c; border-radius:4px;}
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: radial-gradient(circle at 20% 0%, #1c1f26 0, #0b0c10 60%, black 100%);
+            margin: 0;
+            padding: 0;
+            color: var(--text-main);
+        }
+
+        h1, h2, h3, label {
+            color: var(--text-main);
+            letter-spacing: 0.5px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        /* ============================================
+           CARD STYLE
+        ============================================ */
+        .card {
+            background: var(--card-bg);
+            padding: 25px 30px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        /* ============================================
+           FORM INPUTS
+        ============================================ */
+        input[type=text], input[type=number] {
+            width: 100%;
+            padding: 12px;
+            margin-top: 6px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--soft-bg);
+            color: var(--text-main);
+        }
+
+        input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ============================================
+           BUTTON
+        ============================================ */
+        button {
+            margin-top: 20px;
+            padding: 12px 28px;
+            background: var(--tesla-red);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.25s;
+            box-shadow: 0 2px 8px rgba(232,33,39,0.4);
+        }
+
+        button:hover {
+            background: #bb1c22;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(232,33,39,0.5);
+        }
+
+        /* ============================================
+           FLASH MESSAGE
+        ============================================ */
+        .flash {
+            background: rgba(232, 33, 39, 0.15);
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 5px solid var(--tesla-red);
+            border-radius: 4px;
+            color: var(--text-main);
+        }
+
+        /* ============================================
+           IMAGES
+        ============================================ */
+        img {
+            width: 100%;
+            border-radius: 12px;
+            margin-top: 15px;
+            border: 1px solid var(--border);
+            box-shadow: 0 3px 12px rgba(0,0,0,0.4);
+        }
     </style>
 </head>
-<body>
 
+<body>
 <div class="container">
     <h1>Washington County-Level EV Forecast</h1>
 
@@ -38,7 +132,8 @@
             <input type="text" name="county" value="{{ county or '' }}" required>
 
             <label>Supercharger Points:</label>
-            <input type="number" step="any" name="superchargers" placeholder="Enter number of supercharger points"
+            <input type="number" step="any" name="superchargers"
+                   placeholder="Enter number of supercharger points"
                    value="{{ superchargers or '' }}">
 
             <button type="submit">Calculate</button>
@@ -65,7 +160,6 @@
         {% endif %}
     </div>
 
-    <!-- MAP FIRST -->
     <div class="card">
         <h3>County-Level Supercharger & Population Map</h3>
 
@@ -80,7 +174,6 @@
         {% endif %}
     </div>
 
-    <!-- CHART SECOND -->
     <div class="card">
         <h3>County-Level EV Forecast Curve</h3>
         {% if chart_filename %}
