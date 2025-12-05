@@ -102,7 +102,7 @@ ev_forecast_app/
 ## ▶️ Run Locally
 
 ```bash
-git clone https://github.com/<yourname>/ev_forecast_app.git
+git clone https://github.com/judyc4986/ev_forecast_app.git
 cd ev_forecast_app
 pip install -r requirements.txt
 flask run
