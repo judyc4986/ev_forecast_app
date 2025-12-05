@@ -1,4 +1,13 @@
 # ⚡ Washington County-Level EV Forecast Tool  
+
+---
+
+## 🌐 Access the Full EV Growth Strategy Hub  
+👉 **Tesla EV Growth Strategy · Washington EV Hub**  
+https://home-page-ev.onrender.com/ then county-level tool https://ev-forecast.onrender.com/
+
+---
+
 ### Part of the *Tesla EV Growth Strategy · Washington EV Hub*
 
 This repository contains the **County-Level Forecast Tool (`ev_forecast_app`)**, which generates individualized EV adoption and registration forecasts for each Washington county. It is integrated into the full EV Hub ecosystem shown below.
@@ -28,12 +37,6 @@ This repository contains the **County-Level Forecast Tool (`ev_forecast_app`)**,
                                  |    & Adoption)     |
                                  +--------------------+
 ```
-
----
-
-## 🌐 Access the Full EV Growth Strategy Hub  
-👉 **Tesla EV Growth Strategy · Washington EV Hub**  
-https://home-page-ev.onrender.com/ then county-level tool https://ev-forecast.onrender.com/
 
 ---
 
