@@ -33,7 +33,7 @@ This repository contains the **County-Level Forecast Tool (`ev_forecast_app`)**,
 
 ## 🌐 Access the Full EV Growth Strategy Hub  
 👉 **Tesla EV Growth Strategy · Washington EV Hub**  
-https://home-page-ev.onrender.com/
+https://home-page-ev.onrender.com/ then county-level tool https://ev-forecast.onrender.com/
 
 ---
 
