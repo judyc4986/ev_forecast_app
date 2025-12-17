@@ -4,60 +4,70 @@ from flask import Flask, render_template, request, send_from_directory, flash, r
 from openpyxl import load_workbook
 
 # =========================================================
-# BASIC FLASK SETUP
+# APP SETUP
 # =========================================================
 app = Flask(__name__)
 app.secret_key = "random_secret_string"
 
-# =========================================================
-# PATHS – RENDER & LOCAL FRIENDLY
-# =========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-FORMULA_PATH = os.path.join(BASE_DIR, "static", "data", "County-level formula_cleaned.xlsx")
+FORMULA_PATH = os.path.join(BASE_DIR, "static", "data", "equation.xlsx")
 SC_SUMMARY_PATH = os.path.join(BASE_DIR, "static", "data", "supercharger_by_county_summary.xlsx")
 
 CHARTS_DIR = os.path.join(BASE_DIR, "static", "charts")
 MAPS_DIR = os.path.join(BASE_DIR, "static", "maps")
 
 # =========================================================
-# LOAD FORMULA EXCEL USING OPENPYXL
+# COUNTY NORMALIZER (CRITICAL)
+# =========================================================
+def normalize_county(name):
+    if not name:
+        return ""
+    return (
+        str(name)
+        .lower()
+        .replace(" county", "")
+        .strip()
+    )
+
+# =========================================================
+# LOAD EQUATION FILE
 # =========================================================
 if not os.path.exists(FORMULA_PATH):
-    raise FileNotFoundError(f"Cannot find Excel file: {FORMULA_PATH}")
+    raise FileNotFoundError(f"Missing: {FORMULA_PATH}")
 
 wb = load_workbook(FORMULA_PATH)
 ws = wb.active
 
-columns = [cell.value for cell in ws[1]]
+columns = [c.value for c in ws[1]]
 
-df_formulas = []
+formula_rows = []
 for row in ws.iter_rows(min_row=2, values_only=True):
-    row_dict = dict(zip(columns, row))
-    row_dict["County_clean"] = str(row_dict["County"]).strip().lower()
-    df_formulas.append(row_dict)
+    r = dict(zip(columns, row))
+    r["County_clean"] = normalize_county(r["County"])
+    formula_rows.append(r)
 
 # =========================================================
-# LOAD SUPERCARGER SUMMARY FILE
+# LOAD EXISTING SUPERCARGERS
 # =========================================================
 if not os.path.exists(SC_SUMMARY_PATH):
-    raise FileNotFoundError(f"Cannot find Supercharger summary: {SC_SUMMARY_PATH}")
+    raise FileNotFoundError(f"Missing: {SC_SUMMARY_PATH}")
 
 wb_sc = load_workbook(SC_SUMMARY_PATH)
 ws_sc = wb_sc.active
 
-sc_columns = [cell.value for cell in ws_sc[1]]
+sc_columns = [c.value for c in ws_sc[1]]
 
 supercharger_summary = []
 for row in ws_sc.iter_rows(min_row=2, values_only=True):
-    row_dict = dict(zip(sc_columns, row))
-    row_dict["County_clean"] = str(row_dict["County"]).strip().lower()
-    supercharger_summary.append(row_dict)
+    r = dict(zip(sc_columns, row))
+    r["County_clean"] = normalize_county(r["County"])
+    supercharger_summary.append(r)
 
 # =========================================================
-# SAFE FORMULA EVALUATOR
+# SAFE FORMULA EVALUATOR (SUPPORTS LOGISTIC)
 # =========================================================
-def evaluate_formula(formula_str, x_value):
+def evaluate_formula(formula_str, x):
     if not isinstance(formula_str, str):
         return None
 
@@ -65,11 +75,18 @@ def evaluate_formula(formula_str, x_value):
     if len(parts) < 2:
         return None
 
-    expr = parts[1].strip()
-    expr = expr.replace("^", "**")
+    expr = parts[1].strip().replace("^", "**")
+
+    def sigmoid(z):
+        try:
+            return 1 / (1 + math.exp(-z))
+        except OverflowError:
+            return 0.0 if z < 0 else 1.0
 
     allowed = {
-        "x": x_value,
+        "x": x,
+        "L": 1.0,
+        "sigmoid": sigmoid,
         "exp": math.exp,
         "log": math.log,
         "sqrt": math.sqrt
@@ -77,58 +94,67 @@ def evaluate_formula(formula_str, x_value):
 
     try:
         return float(eval(expr, {"__builtins__": {}}, allowed))
-    except Exception:
+    except Exception as e:
+        print("Eval error:", e)
+        print("Formula:", formula_str)
         return None
 
 # =========================================================
-# FIND IMAGE FOR COUNTY
+# IMAGE MATCHER
 # =========================================================
-def find_image_for_county(directory, county_name):
+def find_image_for_county(directory, county):
     if not os.path.isdir(directory):
         return None
 
-    target = county_name.replace(" ", "_").lower()
+    target = normalize_county(county).replace(" ", "_")
 
-    for fname in os.listdir(directory):
-        if fname.lower().endswith(".png") and target in fname.lower():
-            return fname
-
+    for f in os.listdir(directory):
+        if f.lower().endswith(".png") and target in f.lower():
+            return f
     return None
 
 # =========================================================
-# ROUTES TO SERVE STATIC CHARTS & MAPS
+# STATIC ROUTES
 # =========================================================
 @app.route("/chart/<path:filename>")
 def serve_chart(filename):
     return send_from_directory(CHARTS_DIR, filename)
-
 
 @app.route("/map/<path:filename>")
 def serve_map(filename):
     return send_from_directory(MAPS_DIR, filename)
 
 # =========================================================
-# MAIN APP ROUTE
+# MAIN ROUTE
 # =========================================================
 @app.route("/", methods=["GET", "POST"])
 def index():
+
     result = None
+    county_display = None
     chart_filename = None
     map_filename = None
-    county_display = None
-    supercharger_points = None
+    existing_sc = None
 
     if request.method == "POST":
-        county_input = request.form.get("county", "").strip()
-        x_input = request.form.get("superchargers", "").strip()
+        county_input = request.form.get("county", "")
+        year_input = request.form.get("year", "")
 
-        if not county_input:
+        county_clean = normalize_county(county_input)
+
+        if not county_clean:
             flash("Please enter a county name.")
             return redirect(url_for("index"))
 
-        county_clean = county_input.lower()
+        try:
+            year = int(year_input)
+            if year < 2024 or year > 2050:
+                raise ValueError
+        except Exception:
+            flash("Year must be between 2024 and 2050.")
+            return redirect(url_for("index"))
 
-        matches = [r for r in df_formulas if r["County_clean"] == county_clean]
+        matches = [r for r in formula_rows if r["County_clean"] == county_clean]
         if not matches:
             flash(f"County '{county_input}' not found.")
             return redirect(url_for("index"))
@@ -136,49 +162,35 @@ def index():
         row = matches[0]
         county_display = row["County"]
 
-        # ------------------------------------------------------
-        # Load supercharger count for county
-        # ------------------------------------------------------
+        # Existing superchargers
         sc_match = [r for r in supercharger_summary if r["County_clean"] == county_clean]
         if sc_match:
-            supercharger_points = sc_match[0].get("Supercharger_Count", None)
+            existing_sc = sc_match[0].get("Supercharger_Count")
 
-        # ------------------------------------------------------
-        # Forecast values if user entered X
-        # ------------------------------------------------------
-        ev_formula = row.get("EVs_vs_SC_Formula")
-        adopt_formula = row.get("Adopt_vs_SC_Formula")
+        # Forecast calculations
+        sc_formula = row.get("Supercharger_Equation")
+        adopt_formula = row.get("Adoption_Equation")
+        population = row.get("Population")
 
-        if x_input:
-            try:
-                x_val = float(x_input)
-            except ValueError:
-                flash("Supercharger Points must be a valid number.")
-                return redirect(url_for("index"))
+        sc_forecast = evaluate_formula(sc_formula, year)
+        adopt_rate = evaluate_formula(adopt_formula, year)
 
-            ev_y = evaluate_formula(ev_formula, x_val)
-            adopt_y = evaluate_formula(adopt_formula, x_val)
+        if sc_forecast is None or adopt_rate is None or population is None:
+            flash("Could not evaluate equations for this county.")
+            return redirect(url_for("index"))
 
-            if ev_y is None or adopt_y is None:
-                flash("Could not evaluate formulas for this county.")
-                return redirect(url_for("index"))
+        adopt_rate = max(0.0, min(adopt_rate, 1.0))
+        evs = adopt_rate * population
 
-            result = {
-                "x": x_val,
-                "ev_y": ev_y,
-                "adopt_y": adopt_y,
-            }
+        result = {
+            "year": year,
+            "sc_forecast": sc_forecast,
+            "adopt_rate": adopt_rate,
+            "evs": evs
+        }
 
-        # ------------------------------------------------------
-        # Find map & chart
-        # ------------------------------------------------------
         chart_filename = find_image_for_county(CHARTS_DIR, county_display)
         map_filename = find_image_for_county(MAPS_DIR, county_display)
-
-        if map_filename is None:
-            flash(f"No map image found for {county_display}.")
-        if chart_filename is None:
-            flash(f"No chart image found for {county_display}.")
 
     return render_template(
         "index.html",
@@ -186,11 +198,11 @@ def index():
         county=county_display,
         chart_filename=chart_filename,
         map_filename=map_filename,
-        supercharger_points=supercharger_points,
+        existing_sc=existing_sc
     )
 
 # =========================================================
-# LOCAL RUN
+# RUN LOCALLY
 # =========================================================
 if __name__ == "__main__":
     app.run(debug=True)

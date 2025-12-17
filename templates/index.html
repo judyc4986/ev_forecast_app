@@ -4,9 +4,6 @@
     <title>Washington County-Level EV Forecast</title>
 
     <style>
-        /* ============================================
-           TESLA THEME COLORS
-        ============================================ */
         :root {
             --tesla-red: #e82127;
             --dark-bg: #0b0c10;
@@ -21,13 +18,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
             background: radial-gradient(circle at 20% 0%, #1c1f26 0, #0b0c10 60%, black 100%);
             margin: 0;
-            padding: 0;
             color: var(--text-main);
-        }
-
-        h1, h2, h3, label {
-            color: var(--text-main);
-            letter-spacing: 0.5px;
         }
 
         .container {
@@ -36,25 +27,19 @@
             padding: 20px;
         }
 
-        /* ============================================
-           CARD STYLE
-        ============================================ */
         .card {
             background: var(--card-bg);
             padding: 25px 30px;
             border-radius: 12px;
             margin-bottom: 25px;
             border: 1px solid var(--border);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
-        /* ============================================
-           FORM INPUTS
-        ============================================ */
-        input[type=text], input[type=number] {
+        input {
             width: 100%;
             padding: 12px;
             margin-top: 6px;
+            margin-bottom: 15px;
             font-size: 16px;
             border-radius: 8px;
             border: 1px solid var(--border);
@@ -62,127 +47,90 @@
             color: var(--text-main);
         }
 
-        input::placeholder {
-            color: var(--text-muted);
-        }
-
-        /* ============================================
-           BUTTON
-        ============================================ */
         button {
-            margin-top: 20px;
             padding: 12px 28px;
             background: var(--tesla-red);
             color: white;
             border: none;
             border-radius: 8px;
             font-size: 16px;
-            cursor: pointer;
             font-weight: 600;
-            transition: 0.25s;
-            box-shadow: 0 2px 8px rgba(232,33,39,0.4);
+            cursor: pointer;
         }
 
-        button:hover {
-            background: #bb1c22;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(232,33,39,0.5);
-        }
-
-        /* ============================================
-           FLASH MESSAGE
-        ============================================ */
         .flash {
-            background: rgba(232, 33, 39, 0.15);
+            background: rgba(232,33,39,0.15);
             padding: 12px;
             margin-bottom: 10px;
             border-left: 5px solid var(--tesla-red);
-            border-radius: 4px;
-            color: var(--text-main);
         }
 
-        /* ============================================
-           IMAGES
-        ============================================ */
         img {
             width: 100%;
             border-radius: 12px;
             margin-top: 15px;
             border: 1px solid var(--border);
-            box-shadow: 0 3px 12px rgba(0,0,0,0.4);
         }
     </style>
 </head>
 
 <body>
 <div class="container">
+
     <h1>Washington County-Level EV Forecast</h1>
 
     {% with msgs = get_flashed_messages() %}
-      {% if msgs %}
-        {% for m in msgs %}
+      {% for m in msgs %}
         <div class="flash">{{ m }}</div>
-        {% endfor %}
-      {% endif %}
+      {% endfor %}
     {% endwith %}
 
     <div class="card">
         <form method="POST">
-            <label>County Name:</label>
+            <label>County Name</label>
             <input type="text" name="county" value="{{ county or '' }}" required>
 
-            <label>Supercharger Points:</label>
-            <input type="number" step="any" name="superchargers"
-                   placeholder="Enter number of supercharger points"
-                   value="{{ superchargers or '' }}">
+            <label>Forecast Year (2024–2050)</label>
+            <input type="number" name="year" min="2024" max="2050"
+                   value="{{ result.year if result else '' }}" required>
 
             <button type="submit">Calculate</button>
         </form>
     </div>
 
-    {% if county %}
+    {% if county and result %}
     <div class="card">
-        <h2>County: {{ county }}</h2>
-
-        {% if result %}
-        <h3>Forecast Results</h3>
-        <p>For <strong>{{ result.x }}</strong> supercharger points:</p>
+        <h2>{{ county }}</h2>
 
         <ul>
-            <li>EV Registrations:
-                <strong>{{ "{:,.2f}".format(result.ev_y) }}</strong>
-            </li>
+            <li><strong>Forecasted Supercharger Points:</strong>
+                {{ "{:,.0f}".format(result.sc_forecast) }}</li>
 
-            <li>Adoption Rate:
-                <strong>{{ "{:,.2f}".format(result.adopt_y * 100) }}%</strong>
-            </li>
+            <li><strong>Adoption Rate:</strong>
+                {{ "{:.2f}".format(result.adopt_rate * 100) }}%</li>
+
+            <li><strong>EV Registrations:</strong>
+                {{ "{:,.0f}".format(result.evs) }}</li>
         </ul>
-        {% endif %}
     </div>
 
     <div class="card">
-        <h3>County-Level Supercharger & Population Map</h3>
-
-        {% if supercharger_points is not none %}
-        <p><strong>Existing Supercharger Points:</strong> {{ supercharger_points }}</p>
+        <h3>Existing Supercharger Infrastructure</h3>
+        {% if existing_sc is not none %}
+            <p><strong>Existing Supercharger Points:</strong> {{ existing_sc }}</p>
         {% endif %}
 
         {% if map_filename %}
             <img src="{{ url_for('serve_map', filename=map_filename) }}">
-        {% else %}
-            <p>No map available.</p>
         {% endif %}
     </div>
 
     <div class="card">
-        <h3>County-Level EV Forecast Curve</h3>
+        <h3>County Forecast Curve</h3>
         {% if chart_filename %}
             <img src="{{ url_for('serve_chart', filename=chart_filename) }}">
-        {% else %}
-            <p>No chart available.</p>
         {% endif %}
     </div>
-
     {% endif %}
 
 </div>
